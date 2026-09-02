@@ -1,4 +1,4 @@
-# FrameFlow 📸
+# FrameFlow 📸 - Rick and Morty Characters Portfolio App
 
 FrameFlow is a modern, production-grade Android project designed to practice **offline-first image loading and pagination** using Jetpack Compose, Room, Hilt, Retrofit, and Paging 3 (with `RemoteMediator`). 
 
