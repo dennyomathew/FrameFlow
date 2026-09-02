@@ -102,7 +102,7 @@ Search now returns local Room matches immediately for responsiveness, then syncs
 ## 🏁 How to Run & Build
 
 1. Open Android Studio and choose **File > Open**.
-2. Select the `/Users/denny/Workspace/dev/android/FrameFlow` folder.
+2. Select the `FrameFlow` folder.
 3. Sync Gradle and run the `:app` module on your preferred emulator or physical device.
 4. **No API keys or registration required!**
 
