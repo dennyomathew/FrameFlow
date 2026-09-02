@@ -91,6 +91,14 @@ Search now returns local Room matches immediately for responsiveness, then syncs
 
 ---
 
+## 📸 Screenshots
+
+![FrameFlow Home Screen](docs/images/frameflow-home.png)
+
+[View full-size screenshot](docs/images/frameflow-home.png)
+
+---
+
 ## 🏁 How to Run & Build
 
 1. Open Android Studio and choose **File > Open**.
