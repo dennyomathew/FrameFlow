@@ -23,27 +23,29 @@ class CharacterRemoteMediator(
     ): MediatorResult {
         return try {
             val page = when (loadType) {
-                LoadType.REFRESH -> {
-                    val remoteKeys = getRemoteKeyClosestToCurrentPosition(state)
-                    remoteKeys?.nextKey?.minus(1) ?: STARTING_PAGE_INDEX
-                }
+                LoadType.REFRESH -> STARTING_PAGE_INDEX
                 LoadType.PREPEND -> {
-                    val remoteKeys = getRemoteKeyForFirstItem(state)
-                    val prevKey = remoteKeys?.prevKey
-                        ?: return MediatorResult.Success(endOfPaginationReached = true)
-                    prevKey
+                    return MediatorResult.Success(endOfPaginationReached = true)
                 }
                 LoadType.APPEND -> {
                     val remoteKeys = getRemoteKeyForLastItem(state)
                     val nextKey = remoteKeys?.nextKey
-                        ?: return MediatorResult.Success(endOfPaginationReached = true)
+                        ?: return MediatorResult.Success(endOfPaginationReached = remoteKeys != null)
                     nextKey
                 }
             }
 
-            val response = api.getCharacters(page = page)
+            val response = try {
+                api.getCharacters(page = page)
+            } catch (e: HttpException) {
+                if (e.code() == 404) {
+                    return MediatorResult.Success(endOfPaginationReached = true)
+                }
+                throw e
+            }
+
             val characters = response.results
-            val endOfPaginationReached = characters.isEmpty()
+            val endOfPaginationReached = characters.isEmpty() || response.info?.next == null
 
             database.withTransaction {
                 if (loadType == LoadType.REFRESH) {
@@ -75,25 +77,6 @@ class CharacterRemoteMediator(
         } catch (exception: HttpException) {
             MediatorResult.Error(exception)
         }
-    }
-
-    private suspend fun getRemoteKeyClosestToCurrentPosition(
-        state: PagingState<Int, CharacterEntity>
-    ): RemoteKeysEntity? {
-        return state.anchorPosition?.let { position ->
-            state.closestItemToPosition(position)?.id?.let { id ->
-                database.remoteKeysDao.getRemoteKeysForCharacterId(id)
-            }
-        }
-    }
-
-    private suspend fun getRemoteKeyForFirstItem(
-        state: PagingState<Int, CharacterEntity>
-    ): RemoteKeysEntity? {
-        return state.pages.firstOrNull { it.data.isNotEmpty() }?.data?.firstOrNull()
-            ?.let { char ->
-                database.remoteKeysDao.getRemoteKeysForCharacterId(char.id)
-            }
     }
 
     private suspend fun getRemoteKeyForLastItem(

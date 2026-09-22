@@ -62,6 +62,7 @@ class CharacterRepository @Inject constructor(
                 }
                 if (mapped.isEmpty()) return
                 database.characterDao.upsertAll(mapped)
+                if (response.info?.next == null) return
                 page += 1
             } catch (e: HttpException) {
                 if (e.code() == 404) return

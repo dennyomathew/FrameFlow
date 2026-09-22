@@ -10,7 +10,11 @@ interface CharacterDao {
     @Upsert
     suspend fun upsertAll(characters: List<CharacterEntity>)
 
-    @Query("SELECT * FROM characters")
+    @Query(
+        "SELECT characters.* FROM characters " +
+            "INNER JOIN remote_keys ON characters.id = remote_keys.characterId " +
+            "ORDER BY characters.id ASC"
+    )
     fun pagingSource(): PagingSource<Int, CharacterEntity>
 
     @Query("SELECT * FROM characters WHERE id = :id LIMIT 1")
