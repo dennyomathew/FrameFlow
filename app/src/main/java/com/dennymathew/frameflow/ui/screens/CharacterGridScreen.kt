@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,8 +56,34 @@ fun CharacterGridScreen(
         else viewModel.charactersFlow.collectAsLazyPagingItems()
 
     val isRefreshing = lazyPagingItems.loadState.refresh is LoadState.Loading && lazyPagingItems.itemCount > 0
+    val searchSyncFailed by viewModel.searchSyncFailed.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+
+    // Loads that failed while offline are retried automatically once the connection returns.
+    LaunchedEffect(isOnline) {
+        val loadState = lazyPagingItems.loadState
+        if (isOnline && (loadState.refresh is LoadState.Error || loadState.append is LoadState.Error)) {
+            lazyPagingItems.retry()
+        }
+    }
+
+    // Online failures (server errors, timeouts) can succeed on a manual retry, so offer one.
+    // Offline failures are covered by the offline banner and the auto-retry above.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val refreshError = (lazyPagingItems.loadState.refresh as? LoadState.Error)?.error
+    val hasItems = lazyPagingItems.itemCount > 0
+    LaunchedEffect(refreshError, hasItems, isOnline) {
+        if (refreshError == null || !hasItems || !isOnline) return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "Couldn't refresh characters.",
+            actionLabel = "Retry",
+            duration = SnackbarDuration.Long
+        )
+        if (result == SnackbarResult.ActionPerformed) lazyPagingItems.retry()
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Column(
                 modifier = Modifier
@@ -90,10 +117,24 @@ fun CharacterGridScreen(
                         }
                     }
                 )
-                if (isSearching && isSearchSyncing) {
+                if (!isOnline) {
+                    Text(
+                        text = "Offline: showing saved characters",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                    )
+                } else if (isSearching && isSearchSyncing) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth(),
                         color = MaterialTheme.colorScheme.primary
+                    )
+                } else if (isSearching && searchSyncFailed) {
+                    Text(
+                        text = "Couldn't update results: showing saved matches only",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
                     )
                 }
             }
@@ -113,20 +154,18 @@ fun CharacterGridScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            when (val refreshState = lazyPagingItems.loadState.refresh) {
-                is LoadState.Loading -> {
-                    if (lazyPagingItems.itemCount == 0) {
-                        // Full screen loading
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        }
+            val refreshState = lazyPagingItems.loadState.refresh
+            when {
+                // Only take over the screen when there is nothing cached to show.
+                lazyPagingItems.itemCount == 0 && refreshState is LoadState.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
                 }
-                is LoadState.Error -> {
-                    // Full screen error
+                lazyPagingItems.itemCount == 0 && refreshState is LoadState.Error -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -135,43 +174,47 @@ fun CharacterGridScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Failed to load characters",
+                            text = if (isOnline) "Failed to load characters" else "You're offline",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.error
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = refreshState.error.localizedMessage ?: "Unknown error",
+                            text = if (isOnline) {
+                                refreshState.error.localizedMessage ?: "Unknown error"
+                            } else {
+                                "Characters will load when you reconnect."
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { lazyPagingItems.retry() }) {
-                            Text(text = "Retry")
+                        if (isOnline) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = { lazyPagingItems.retry() }) {
+                                Text(text = "Retry")
+                            }
+                        }
+                    }
+                }
+                isSearching && lazyPagingItems.itemCount == 0 -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSearchSyncing) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        } else {
+                            Text(
+                                text = "No characters found for \"$query\"",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
+                            )
                         }
                     }
                 }
                 else -> {
-                    if (isSearching && lazyPagingItems.itemCount == 0) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isSearchSyncing) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            } else {
-                                Text(
-                                    text = "No characters found for \"$query\"",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
-                                )
-                            }
-                        }
-                        return@PullToRefreshBox
-                    }
-
                     // Character grid
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
@@ -213,6 +256,14 @@ fun CharacterGridScreen(
                                             .padding(16.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
+                                        if (!isOnline) {
+                                            Text(
+                                                text = "More characters will load when you reconnect",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                                            )
+                                            return@Column
+                                        }
                                         Text(
                                             text = "Failed to load more characters",
                                             style = MaterialTheme.typography.bodyMedium,
