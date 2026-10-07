@@ -1,0 +1,37 @@
+# FrameFlow
+
+Offline-first Android app: Rick and Morty characters with Jetpack Compose, Paging 3
+(`RemoteMediator`), Room, Hilt and Retrofit. See `docs/ARCHITECTURE.md` for the design.
+
+## Commands
+
+```bash
+./gradlew assembleDebug        # build
+./gradlew testDebugUnitTest    # unit tests (JVM, Robolectric; no device needed)
+./gradlew lintDebug            # Android lint
+```
+
+CI (`.github/workflows/android.yml`) runs all three on pushes to `main` and on pull requests.
+
+## Toolchain
+
+- The Gradle daemon is pinned to **JDK 25** in `gradle/gradle-daemon-jvm.properties`.
+  Install JDK 25 locally; CI uses Temurin 25.
+- Android SDK: compile/target SDK 35. Set `ANDROID_HOME` or `sdk.dir` in `local.properties`.
+- Dependencies live in `gradle/libs.versions.toml`; add new ones there, not inline.
+- `gradle.properties` raises the daemon heap to 2 GB; the 512 MB default runs out during
+  dex merging on a cold cache.
+
+## Tests
+
+- `app/src/test`: Robolectric with an in-memory Room database (`testutil/TestDatabase.kt`)
+  and a programmable fake API (`testutil/FakeRickAndMortyApi.kt`).
+- The test database runs queries inline (`setQueryExecutor { it.run() }`) so coroutine tests
+  don't race Room's executors.
+- Robolectric is pinned to SDK 35 in `app/src/test/resources/robolectric.properties`.
+
+## Gotchas
+
+- Maven Central sometimes rate-limits fresh dependency downloads (HTTP 429). Retry with
+  `--max-workers=1`; once cached it doesn't recur.
+- Dependabot opens weekly update PRs (`.github/dependabot.yml`); merge them when CI is green.
