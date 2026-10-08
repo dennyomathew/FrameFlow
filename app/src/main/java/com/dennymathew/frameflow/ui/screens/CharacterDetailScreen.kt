@@ -8,6 +8,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.SubcomposeAsyncImage
@@ -26,6 +30,7 @@ fun CharacterDetailScreen(
 ) {
     val character by viewModel.character.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isFavorite by viewModel.isFavorite.collectAsState()
 
     LaunchedEffect(characterId) {
         viewModel.load(characterId)
@@ -37,6 +42,18 @@ fun CharacterDetailScreen(
                 title = { Text(text = character?.name ?: "Character") },
                 navigationIcon = {
                     TextButton(onClick = onBackClick) { Text("Back") }
+                },
+                actions = {
+                    if (character != null) {
+                        FavoriteButton(
+                            isFavorite = isFavorite,
+                            onClick = viewModel::toggleFavorite,
+                            modifier = Modifier
+                                .padding(end = 4.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.35f))
+                        )
+                    }
                 }
             )
         },

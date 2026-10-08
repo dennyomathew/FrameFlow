@@ -2,12 +2,14 @@ package com.dennymathew.frameflow.ui
 
 import com.dennymathew.frameflow.data.local.ImageDatabase
 import com.dennymathew.frameflow.data.repository.CharacterRepository
+import com.dennymathew.frameflow.data.repository.FavoritesRepository
 import com.dennymathew.frameflow.testutil.FakeRickAndMortyApi
 import com.dennymathew.frameflow.testutil.characterDto
 import com.dennymathew.frameflow.testutil.inMemoryDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -16,6 +18,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,7 +38,10 @@ class CharacterDetailViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         database = inMemoryDatabase()
-        viewModel = CharacterDetailViewModel(CharacterRepository(api, database))
+        viewModel = CharacterDetailViewModel(
+            CharacterRepository(api, database),
+            FavoritesRepository(database)
+        )
     }
 
     @After
@@ -64,5 +70,22 @@ class CharacterDetailViewModelTest {
 
         assertNull(viewModel.character.value)
         assertFalse(viewModel.isLoading.value)
+    }
+
+    @Test
+    fun toggleFavorite_savesAndRemovesTheLoadedCharacter() = runTest(dispatcher) {
+        api.onGetCharacterById = { characterDto(it, name = "Rick Sanchez") }
+        viewModel.isFavorite.launchIn(backgroundScope)
+        viewModel.load(1)
+        advanceUntilIdle()
+        assertFalse(viewModel.isFavorite.value)
+
+        viewModel.toggleFavorite()
+        advanceUntilIdle()
+        assertTrue(viewModel.isFavorite.value)
+
+        viewModel.toggleFavorite()
+        advanceUntilIdle()
+        assertFalse(viewModel.isFavorite.value)
     }
 }

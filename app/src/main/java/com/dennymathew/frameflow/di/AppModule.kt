@@ -26,7 +26,7 @@ object AppModule {
             context,
             ImageDatabase::class.java,
             ImageDatabase.DATABASE_NAME
-        ).build()
+        ).addMigrations(*ImageDatabase.ALL_MIGRATIONS).build()
     }
 
     @Provides
