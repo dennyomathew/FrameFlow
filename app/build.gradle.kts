@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.dennymathew.frameflow"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.dennymathew.frameflow"
