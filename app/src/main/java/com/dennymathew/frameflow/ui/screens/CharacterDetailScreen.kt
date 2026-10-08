@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
+import com.dennymathew.frameflow.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
@@ -41,7 +43,12 @@ fun CharacterDetailScreen(
             TopAppBar(
                 title = { Text(text = character?.name ?: "Character") },
                 navigationIcon = {
-                    TextButton(onClick = onBackClick) { Text("Back") }
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_back),
+                            contentDescription = "Back"
+                        )
+                    }
                 },
                 actions = {
                     if (character != null) {
