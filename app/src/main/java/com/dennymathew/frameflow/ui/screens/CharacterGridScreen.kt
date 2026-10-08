@@ -23,6 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,6 +48,9 @@ fun CharacterGridScreen(
     modifier: Modifier = Modifier
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    var showFavorites by rememberSaveable { mutableStateOf(false) }
+    val favorites by viewModel.favorites.collectAsState()
+    val favoriteIds by viewModel.favoriteIds.collectAsState()
     val isSearching = query.isNotBlank()
     val isSearchSyncing by viewModel.isSearchSyncing.collectAsState(initial = false)
     LaunchedEffect(query) {
@@ -117,7 +123,16 @@ fun CharacterGridScreen(
                         }
                     }
                 )
-                if (!isOnline) {
+                ListToggle(
+                    showFavorites = showFavorites,
+                    onShowFavoritesChange = { showFavorites = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                )
+                if (showFavorites) {
+                    // Favorites are stored on the device, so connection status doesn't apply.
+                } else if (!isOnline) {
                     Text(
                         text = "Offline: showing saved characters",
                         style = MaterialTheme.typography.bodySmall,
@@ -141,6 +156,18 @@ fun CharacterGridScreen(
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
+        if (showFavorites) {
+            FavoritesGrid(
+                favorites = favorites.filter { it.name.contains(query.trim(), ignoreCase = true) },
+                query = query.trim(),
+                onCharacterClick = onCharacterClick,
+                onToggleFavorite = viewModel::toggleFavorite,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            )
+            return@Scaffold
+        }
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = {
@@ -226,7 +253,12 @@ fun CharacterGridScreen(
                         items(lazyPagingItems.itemCount) { index ->
                             val character = lazyPagingItems[index]
                             if (character != null) {
-                                CharacterCard(character = character, onClick = { onCharacterClick(character.id) })
+                                CharacterCard(
+                                    character = character,
+                                    isFavorite = character.id in favoriteIds,
+                                    onClick = { onCharacterClick(character.id) },
+                                    onToggleFavorite = { viewModel.toggleFavorite(character) }
+                                )
                             }
                         }
 
@@ -291,10 +323,96 @@ fun CharacterGridScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ListToggle(
+    showFavorites: Boolean,
+    onShowFavoritesChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    SingleChoiceSegmentedButtonRow(modifier = modifier) {
+        SegmentedButton(
+            selected = !showFavorites,
+            onClick = { onShowFavoritesChange(false) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+        ) { Text("All") }
+        SegmentedButton(
+            selected = showFavorites,
+            onClick = { onShowFavoritesChange(true) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+        ) { Text("Favorites") }
+    }
+}
+
+@Composable
+fun FavoritesGrid(
+    favorites: List<CharacterEntity>,
+    query: String,
+    onCharacterClick: (Int) -> Unit,
+    onToggleFavorite: (CharacterEntity) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (favorites.isEmpty()) {
+        Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) {
+            Text(
+                text = if (query.isEmpty()) {
+                    "No favorites yet. Tap ♡ on a character to save it."
+                } else {
+                    "No favorites match \"$query\""
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
+            )
+        }
+        return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier
+    ) {
+        items(favorites.size, key = { favorites[it].id }) { index ->
+            val character = favorites[index]
+            CharacterCard(
+                character = character,
+                isFavorite = true,
+                onClick = { onCharacterClick(character.id) },
+                onToggleFavorite = { onToggleFavorite(character) }
+            )
+        }
+    }
+}
+
+/** A heart toggle; text glyphs avoid pulling in the Material icons library. */
+@Composable
+fun FavoriteButton(
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier.semantics {
+            contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites"
+        }
+    ) {
+        Text(
+            text = if (isFavorite) "♥" else "♡",
+            style = MaterialTheme.typography.titleLarge,
+            color = if (isFavorite) Color(0xFFE91E63) else Color.White,
+            modifier = Modifier.clearAndSetSemantics { }
+        )
+    }
+}
+
 @Composable
 fun CharacterCard(
     character: CharacterEntity,
+    isFavorite: Boolean,
     onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -351,6 +469,15 @@ fun CharacterCard(
                         }
                     },
                     modifier = Modifier.fillMaxSize()
+                )
+                FavoriteButton(
+                    isFavorite = isFavorite,
+                    onClick = onToggleFavorite,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.35f))
                 )
             }
 

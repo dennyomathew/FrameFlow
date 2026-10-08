@@ -7,7 +7,9 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.data.network.ConnectivityObserver
+import com.dennymathew.frameflow.data.local.toCharacter
 import com.dennymathew.frameflow.data.repository.CharacterRepository
+import com.dennymathew.frameflow.data.repository.FavoritesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -27,8 +30,21 @@ import javax.inject.Inject
 @HiltViewModel
 class CharacterViewModel @Inject constructor(
     private val repository: CharacterRepository,
+    private val favoritesRepository: FavoritesRepository,
     connectivityObserver: ConnectivityObserver
 ) : ViewModel() {
+
+    /** Saved characters, most recently saved first. */
+    val favorites: StateFlow<List<CharacterEntity>> = favoritesRepository.favorites
+        .map { list -> list.map { it.toCharacter() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val favoriteIds: StateFlow<Set<Int>> = favoritesRepository.favoriteIds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    fun toggleFavorite(character: CharacterEntity) {
+        viewModelScope.launch { favoritesRepository.toggle(character) }
+    }
 
     val isOnline: StateFlow<Boolean> = connectivityObserver.isOnline
         .stateIn(viewModelScope, SharingStarted.Eagerly, connectivityObserver.isCurrentlyOnline())
