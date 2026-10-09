@@ -34,6 +34,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import android.util.Log
 import coil.request.ImageRequest
 import coil.compose.SubcomposeAsyncImage
@@ -154,17 +155,31 @@ fun CharacterGridScreen(
                 }
             }
         },
+        // safeDrawing includes the keyboard, so search results can scroll above it.
+        contentWindowInsets = WindowInsets.safeDrawing,
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
+        // Edge-to-edge: the container takes only the top bar's space; grids get the bottom and
+        // side insets as contentPadding so they scroll behind the navigation bar.
+        val layoutDirection = LocalLayoutDirection.current
+        val gridPadding = PaddingValues(
+            start = innerPadding.calculateStartPadding(layoutDirection) + 12.dp,
+            top = 12.dp,
+            end = innerPadding.calculateEndPadding(layoutDirection) + 12.dp,
+            bottom = innerPadding.calculateBottomPadding() + 12.dp
+        )
+        val contentModifier = Modifier
+            .fillMaxSize()
+            .padding(top = innerPadding.calculateTopPadding())
+            .consumeWindowInsets(innerPadding)
         if (showFavorites) {
             FavoritesGrid(
                 favorites = favorites.filter { it.name.contains(query.trim(), ignoreCase = true) },
                 query = query.trim(),
                 onCharacterClick = onCharacterClick,
                 onToggleFavorite = viewModel::toggleFavorite,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
+                contentPadding = gridPadding,
+                modifier = contentModifier
             )
             return@Scaffold
         }
@@ -176,9 +191,7 @@ fun CharacterGridScreen(
                     viewModel.refreshSearch()
                 }
             },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier = contentModifier
                 .background(MaterialTheme.colorScheme.background)
         ) {
             val refreshState = lazyPagingItems.loadState.refresh
@@ -245,7 +258,7 @@ fun CharacterGridScreen(
                     // Character grid
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
-                        contentPadding = PaddingValues(12.dp),
+                        contentPadding = gridPadding,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize()
@@ -350,6 +363,7 @@ fun FavoritesGrid(
     query: String,
     onCharacterClick: (Int) -> Unit,
     onToggleFavorite: (CharacterEntity) -> Unit,
+    contentPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
     if (favorites.isEmpty()) {
@@ -368,7 +382,7 @@ fun FavoritesGrid(
     }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(12.dp),
+        contentPadding = contentPadding,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier
