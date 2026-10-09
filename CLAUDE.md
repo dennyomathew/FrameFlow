@@ -42,7 +42,16 @@ CI (`.github/workflows/android.yml`) runs all three on pushes to `main` and on p
 
 - Maven Central sometimes rate-limits fresh dependency downloads (HTTP 429). Retry with
   `--max-workers=1`; once cached it doesn't recur.
+- `rickandmortyapi.com` returns HTTP 429 to request bursts. Coil's `ImageLoader` (in `AppModule`)
+  caps downloads per host, and `RateLimitRetryInterceptor` retries 429s on both the API and the
+  image clients. Keep both when changing the network setup; see `docs/ARCHITECTURE.md` §8.
 - Dependabot opens weekly update PRs (`.github/dependabot.yml`); merge them when CI is green.
+
+## Android skills
+
+- `.claude/skills/` holds Google's Android agent skills (edge-to-edge, intent security, testing
+  setup, AGP 9, adaptive layouts); see `.claude/skills/README.md`. Follow them when touching
+  those areas, and review new UI against `edge-to-edge` and `testing-setup`.
 
 ## Git workflow
 

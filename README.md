@@ -12,7 +12,7 @@ It fetches high-quality character assets from the ultra-reliable **Rick and Mort
 - **Image Loading**: [Coil](https://coil-kt.github.io/coil/) (Coroutine Image Loader) for smooth asynchronous image loading with circular load indicators and fallback states.
 - **Dependency Injection**: [Hilt](https://developer.android.com/training/dependency-injection/hilt-android) for robust, compile-time-safe dependency injection.
 - **Local Caching (Single Source of Truth)**: [Room Database](https://developer.android.com/training/data-storage/room) for persistent offline caching.
-- **Networking**: [Retrofit 2](https://square.github.io/retrofit/) & OkHttp 3 with logging interception for API communication.
+- **Networking**: [Retrofit 3](https://square.github.io/retrofit/) & OkHttp 5 with logging interception for API communication, plus automatic retry when the API rate-limits requests (HTTP 429).
 - **Pagination & Offline Caching**: [Paging 3](https://developer.android.com/topic/libraries/architecture/paging/v3-paged-data) with `RemoteMediator` to seamlessly coordinate remote API calls and database updates.
 
 ---
@@ -44,13 +44,14 @@ FrameFlow/
 │   │   │   │   ├── remote/               # Networking layer
 │   │   │   │   │   ├── RickAndMortyApi.kt # Retrofit endpoints (Rick and Morty API)
 │   │   │   │   │   ├── RickAndMortyResponse.kt # Data Transfer Object (DTO)
+│   │   │   │   │   ├── RateLimitRetryInterceptor.kt # Retries HTTP 429 with backoff
 │   │   │   │   │   └── CharacterRemoteMediator.kt # Core Paging 3 engine coordinating network + DB
 │   │   │   │   │
 │   │   │   │   └── repository/           # Repository pattern
 │   │   │   │       └── CharacterRepository.kt # Exposes PagingData streams to UI
 │   │   │   │
 │   │   │   ├── di/
-│   │   │   │   └── AppModule.kt          # Hilt module supplying Singletons (Retrofit, DB, etc.)
+│   │   │   │   └── AppModule.kt          # Hilt module supplying Singletons (Retrofit, DB, Coil ImageLoader)
 │   │   │   │
 │   │   │   └── ui/
 │   │   │       ├── CharacterViewModel.kt # List paging + hybrid search orchestration
@@ -85,6 +86,8 @@ The `CharacterGridScreen` explicitly handles all states of a paging stream:
 
 ### 3. Asynchronous Image Loading with Coil
 Images are loaded smoothly via Coil, utilizing `SubcomposeAsyncImage` to render crossfaded placeholders and loading animations so the grid remains buttery smooth during scrolling.
+
+The Rick and Morty API rate-limits bursts (HTTP 429), which a fast scroll through the grid easily triggers. FrameFlow's Coil `ImageLoader` limits avatar downloads to 4 at a time, and a `RateLimitRetryInterceptor` retries any 429 up to 3 times: it backs off 1 s → 2 s → 4 s, or waits longer if the server's `Retry-After` header asks for it. See [Networking and rate limits](docs/ARCHITECTURE.md#8-networking-and-rate-limits).
 
 ### 4. Hybrid Search (DB-first + Network Sync)
 Search now returns local Room matches immediately for responsiveness, then syncs network results in the background and upserts them into Room. Because the UI observes Room paging data, newly synced matches appear automatically without switching screens or data sources.

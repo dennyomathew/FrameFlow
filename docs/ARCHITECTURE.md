@@ -16,6 +16,7 @@ FrameFlow follows a layered architecture:
    Room stores character entities and paging remote keys.
 5. **Remote layer (Retrofit API)**  
    Rick and Morty API provides paginated character data and details by ID.
+   Coil downloads character avatars from the same host (see section 8).
 
 ## 2. Core components
 
@@ -27,6 +28,8 @@ FrameFlow follows a layered architecture:
 - `CharacterRepository.kt`: Data source coordination.
 - `CharacterRemoteMediator.kt`: Offline-first paging sync (network -> Room).
 - `CharacterDao.kt`: Room queries for full list, by-id lookup, and search paging.
+- `RateLimitRetryInterceptor.kt`: Retries HTTP 429 responses for API and image requests.
+- `AppModule.kt`: Hilt providers for Room, the OkHttp/Retrofit client, and Coil's `ImageLoader`.
 
 ## 3. List paging flow (offline-first)
 
@@ -134,7 +137,54 @@ This design balances:
 - **Correctness/completeness**: online sync discovers newer or previously uncached items.
 - **Resilience**: still functional when network is slow or unavailable.
 
-## 8. Current constraints and extension points
+## 8. Networking and rate limits
+
+`rickandmortyapi.com` rate-limits bursts of requests and answers them with **HTTP 429 (Too Many
+Requests)**. The first page of the grid (about 20 avatars) is fine, but a fast scroll asks for
+dozens of avatars at once. Before this handling existed, those images failed and the cards showed
+Coil's error placeholder (❌).
+
+Two mechanisms keep requests under the limit and recover when they're not:
+
+### 8.1 Fewer parallel image downloads
+
+`AppModule.provideImageLoader` builds Coil's `ImageLoader` (installed app-wide by
+`FrameFlowApplication`, which implements Coil's `ImageLoaderFactory`). Its OkHttp client:
+
+- shares the API client's connection pool (`okHttpClient.newBuilder()`),
+- drops the API client's interceptors, so image bytes aren't body-logged,
+- uses its own `Dispatcher` with `maxRequestsPerHost = 4` (OkHttp's default is 5, shared with
+  API calls), so avatars queue up instead of arriving at the server all at once.
+
+Coil's memory and disk caches mean an avatar is downloaded once; scrolling back doesn't hit the
+network again.
+
+### 8.2 Retry on 429
+
+`RateLimitRetryInterceptor` sits on both the Retrofit client and the image client. When a
+response is 429 it closes it, waits, and sends the request again:
+
+| Attempt | Wait before retrying |
+|---|---|
+| 1st retry | 1 s |
+| 2nd retry | 2 s |
+| 3rd retry | 4 s |
+
+- If the server's `Retry-After` header (in seconds) asks for longer than the backoff, that
+  longer wait is used. A shorter one is ignored: the API sits behind Cloudflare, whose rate
+  limiter (error code 1015) answers with `Retry-After: 0`, and retrying at once just gets
+  another 429.
+- Every wait is capped at 10 s, so a large `Retry-After` can't stall a request for minutes.
+- After 3 retries the 429 is returned as-is: Coil shows the error placeholder, and Paging shows
+  its retry banner.
+- Other status codes (404, 500, …) and successful responses pass through untouched.
+- Waiting blocks only the OkHttp worker thread for that request, never the main thread.
+
+The defaults (`maxRetries`, `baseDelayMillis`, `maxDelayMillis`) are constructor parameters, and
+the sleep function is injectable, which is how `RateLimitRetryInterceptorTest` checks the
+backoff without real delays or network.
+
+## 9. Current constraints and extension points
 
 - Current local search uses `LIKE` matching on `name`.
 - For larger datasets, upgrade to **Room FTS** for faster full-text queries and better ranking.
