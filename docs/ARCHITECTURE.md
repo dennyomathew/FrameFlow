@@ -166,10 +166,14 @@ response is 429 it closes it, waits, and sends the request again:
 
 | Attempt | Wait before retrying |
 |---|---|
-| 1st retry | `Retry-After` seconds if the server sent the header, else 1 s |
-| 2nd retry | `Retry-After`, else 2 s |
-| 3rd retry | `Retry-After`, else 4 s |
+| 1st retry | 1 s |
+| 2nd retry | 2 s |
+| 3rd retry | 4 s |
 
+- If the server's `Retry-After` header (in seconds) asks for longer than the backoff, that
+  longer wait is used. A shorter one is ignored: the API sits behind Cloudflare, whose rate
+  limiter (error code 1015) answers with `Retry-After: 0`, and retrying at once just gets
+  another 429.
 - Every wait is capped at 10 s, so a large `Retry-After` can't stall a request for minutes.
 - After 3 retries the 429 is returned as-is: Coil shows the error placeholder, and Paging shows
   its retry banner.

@@ -8,8 +8,10 @@ import java.io.IOException
  * Retries requests the server rejects with HTTP 429 (Too Many Requests).
  *
  * The Rick and Morty API rate-limits bursts, which a scrolling grid of avatars easily triggers.
- * Waits for the `Retry-After` delay when the server sends one (capped at [maxDelayMillis]),
- * otherwise backs off exponentially from [baseDelayMillis].
+ * Backs off exponentially from [baseDelayMillis], waiting longer when the server's `Retry-After`
+ * header asks for more, and never more than [maxDelayMillis]. `Retry-After` is only a lower
+ * bound: the API's Cloudflare front end sends `Retry-After: 0` with its 429s, and retrying
+ * immediately would just be rejected again.
  */
 class RateLimitRetryInterceptor(
     private val maxRetries: Int = 3,
@@ -22,7 +24,8 @@ class RateLimitRetryInterceptor(
         var response = chain.proceed(chain.request())
         var attempt = 0
         while (response.code == HTTP_TOO_MANY_REQUESTS && attempt < maxRetries) {
-            val delayMillis = retryAfterMillis(response) ?: (baseDelayMillis shl attempt)
+            val backoffMillis = baseDelayMillis shl attempt
+            val delayMillis = maxOf(backoffMillis, retryAfterMillis(response) ?: 0)
             response.close()
             try {
                 sleep(delayMillis.coerceAtMost(maxDelayMillis))

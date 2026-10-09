@@ -52,9 +52,16 @@ class RateLimitRetryInterceptorTest {
     }
 
     @Test
-    fun retryAfterHeaderIsHonouredAndCapped() {
-        assertEquals(200, client(429 to "2", 429 to "60", 200 to null).get())
-        assertEquals(listOf(2_000L, 10_000L), sleeps)
+    fun longerRetryAfterIsHonouredAndCapped() {
+        assertEquals(200, client(429 to "3", 429 to "60", 200 to null).get())
+        assertEquals(listOf(3_000L, 10_000L), sleeps)
+    }
+
+    @Test
+    fun shorterRetryAfterDoesNotCutBackoff() {
+        // Cloudflare's rate limiter answers with "Retry-After: 0".
+        assertEquals(200, client(429 to "0", 429 to "1", 200 to null).get())
+        assertEquals(listOf(1_000L, 2_000L), sleeps)
     }
 
     @Test

@@ -87,7 +87,7 @@ The `CharacterGridScreen` explicitly handles all states of a paging stream:
 ### 3. Asynchronous Image Loading with Coil
 Images are loaded smoothly via Coil, utilizing `SubcomposeAsyncImage` to render crossfaded placeholders and loading animations so the grid remains buttery smooth during scrolling.
 
-The Rick and Morty API rate-limits bursts (HTTP 429), which a fast scroll through the grid easily triggers. FrameFlow's Coil `ImageLoader` limits avatar downloads to 4 at a time, and a `RateLimitRetryInterceptor` retries any 429 up to 3 times: it waits for the server's `Retry-After` delay, or backs off 1 s → 2 s → 4 s. See [Networking and rate limits](docs/ARCHITECTURE.md#8-networking-and-rate-limits).
+The Rick and Morty API rate-limits bursts (HTTP 429), which a fast scroll through the grid easily triggers. FrameFlow's Coil `ImageLoader` limits avatar downloads to 4 at a time, and a `RateLimitRetryInterceptor` retries any 429 up to 3 times: it backs off 1 s → 2 s → 4 s, or waits longer if the server's `Retry-After` header asks for it. See [Networking and rate limits](docs/ARCHITECTURE.md#8-networking-and-rate-limits).
 
 ### 4. Hybrid Search (DB-first + Network Sync)
 Search now returns local Room matches immediately for responsiveness, then syncs network results in the background and upserts them into Room. Because the UI observes Room paging data, newly synced matches appear automatically without switching screens or data sources.
