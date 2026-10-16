@@ -515,18 +515,7 @@ fun CharacterCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    val statusColor = when (character.status.lowercase()) {
-                        "alive" -> Color(0xFF4CAF50)
-                        "dead" -> Color(0xFFF44336)
-                        else -> Color(0xFF9E9E9E)
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(statusColor)
-                    )
+                    StatusDot(character.status)
 
                     Text(
                         text = "${character.status} - ${character.species}",
@@ -539,4 +528,20 @@ fun CharacterCard(
             }
         }
     }
+}
+
+/** Green for alive, red for dead, grey for unknown. */
+@Composable
+internal fun StatusDot(status: String, modifier: Modifier = Modifier) {
+    val color = when (status.lowercase()) {
+        "alive" -> Color(0xFF4CAF50)
+        "dead" -> Color(0xFFF44336)
+        else -> Color(0xFF9E9E9E)
+    }
+    Box(
+        modifier = modifier
+            .size(10.dp)
+            .clip(CircleShape)
+            .background(color)
+    )
 }

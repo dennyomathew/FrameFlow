@@ -60,15 +60,7 @@ class CharacterRemoteMediator(
                 }
 
                 database.remoteKeysDao.insertAll(keys)
-                database.characterDao.upsertAll(characters.map {
-                    CharacterEntity(
-                        id = it.id,
-                        name = it.name,
-                        status = it.status,
-                        species = it.species,
-                        imageUrl = it.image
-                    )
-                })
+                database.characterDao.upsertAll(characters.map { it.toEntity() })
             }
 
             MediatorResult.Success(endOfPaginationReached = endOfPaginationReached)

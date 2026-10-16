@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
+import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.ui.CharacterDetailViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 
@@ -117,13 +118,52 @@ fun CharacterDetailScreen(
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(text = "Status: ${character?.status.orEmpty()}")
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "Species: ${character?.species.orEmpty()}")
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "ID: ${character?.id ?: characterId}")
+                    character?.let { CharacterFacts(it) }
                 }
+            }
+        }
+    }
+}
+
+/** Status line plus labelled facts. Facts the API (or an old cached row) left empty are skipped. */
+@Composable
+private fun CharacterFacts(character: CharacterEntity) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 6.dp)
+    ) {
+        StatusDot(character.status)
+        Text(
+            text = listOf(character.status, character.species, character.type)
+                .filter { it.isNotBlank() }
+                .joinToString(" · "),
+            style = MaterialTheme.typography.titleMedium
+        )
+    }
+
+    val facts = listOf(
+        "Gender" to character.gender,
+        "Origin" to character.originName,
+        "Last known location" to character.locationName,
+        "Episodes" to character.episodeCount.takeIf { it > 0 }?.toString().orEmpty(),
+        "ID" to character.id.toString()
+    ).filter { (_, value) -> value.isNotBlank() }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            facts.forEachIndexed { index, (label, value) ->
+                if (index > 0) HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(text = value, style = MaterialTheme.typography.bodyLarge)
             }
         }
     }

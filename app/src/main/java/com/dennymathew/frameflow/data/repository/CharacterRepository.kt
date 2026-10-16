@@ -6,8 +6,10 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.dennymathew.frameflow.data.local.ImageDatabase
 import com.dennymathew.frameflow.data.local.CharacterEntity
+import com.dennymathew.frameflow.data.local.hasDetails
 import com.dennymathew.frameflow.data.remote.RickAndMortyApi
 import com.dennymathew.frameflow.data.remote.CharacterRemoteMediator
+import com.dennymathew.frameflow.data.remote.toEntity
 import kotlinx.coroutines.flow.Flow
 import retrofit2.HttpException
 import javax.inject.Inject
@@ -51,15 +53,7 @@ class CharacterRepository @Inject constructor(
         repeat(MAX_SEARCH_SYNC_PAGES) {
             try {
                 val response = api.getCharacters(page = page, name = name)
-                val mapped = response.results.map {
-                    CharacterEntity(
-                        id = it.id,
-                        name = it.name,
-                        status = it.status,
-                        species = it.species,
-                        imageUrl = it.image
-                    )
-                }
+                val mapped = response.results.map { it.toEntity() }
                 if (mapped.isEmpty()) return
                 database.characterDao.upsertAll(mapped)
                 if (response.info?.next == null) return
@@ -79,20 +73,16 @@ class CharacterRepository @Inject constructor(
             null
         }
 
-        if (dbItem != null) return dbItem
+        // Rows cached before schema 3 lack gender, origin etc.; refetch those once.
+        if (dbItem != null && dbItem.hasDetails) return dbItem
 
-        // fallback to network
+        // fallback to network, keeping the stale row if that fails
         return try {
-            val dto = api.getCharacterById(id)
-            CharacterEntity(
-                id = dto.id,
-                name = dto.name,
-                status = dto.status,
-                species = dto.species,
-                imageUrl = dto.image
-            )
+            val fetched = api.getCharacterById(id).toEntity()
+            database.characterDao.upsertAll(listOf(fetched))
+            fetched
         } catch (e: Exception) {
-            null
+            dbItem
         }
     }
 
