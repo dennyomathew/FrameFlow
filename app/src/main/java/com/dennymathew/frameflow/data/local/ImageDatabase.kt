@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [CharacterEntity::class, RemoteKeysEntity::class, FavoriteEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class ImageDatabase : RoomDatabase() {
@@ -31,6 +31,18 @@ abstract class ImageDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2)
+        /** Adds type, gender, origin, location and episode count to characters and favorites. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                for (table in listOf("characters", "favorites")) {
+                    for (column in listOf("type", "gender", "originName", "locationName")) {
+                        db.execSQL("ALTER TABLE `$table` ADD COLUMN `$column` TEXT NOT NULL DEFAULT ''")
+                    }
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `episodeCount` INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }

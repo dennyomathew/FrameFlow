@@ -62,6 +62,17 @@ class CharacterDetailScreenTest {
     }
 
     @Test
+    fun showsDetailsFromTheApi() {
+        composeRule.onNodeWithText("Alive · Human").assertExists()
+        composeRule.onNodeWithText("Male").assertExists()
+        composeRule.onNodeWithText("Earth (C-137)").assertExists()
+        composeRule.onNodeWithText("Last known location").assertExists()
+        composeRule.onNodeWithText("Citadel of Ricks").assertExists()
+        composeRule.onNodeWithText("Episodes").assertExists()
+        composeRule.onNodeWithText("2").assertExists()
+    }
+
+    @Test
     fun tappingBackArrow_navigatesBack() {
         composeRule.onNodeWithContentDescription("Back").performClick()
 

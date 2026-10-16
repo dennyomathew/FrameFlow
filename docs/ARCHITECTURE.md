@@ -104,6 +104,13 @@ Details route is `detail/{id}`:
 2. Navigation passes selected `id` to detail route.
 3. `CharacterDetailViewModel.load(id)` calls repository.
 4. Repository tries Room first (`characterDao.getById(id)`), then network fallback.
+   A network result is stored in Room, so the next open is served offline.
+5. The screen shows status, species and type, then gender, origin, last known location and
+   episode count. Empty values are skipped.
+
+Rows cached before schema 3 (and favorites saved before it) have empty detail columns.
+`CharacterEntity.hasDetails` (gender is never empty in API data) detects them, and the
+repository refetches such a row once; offline, it falls back to the stale row.
 5. Screen renders loading, not-found, or detail content.
 
 ## 6. Search mechanism (hybrid)

@@ -1,6 +1,7 @@
 package com.dennymathew.frameflow.testutil
 
 import com.dennymathew.frameflow.data.remote.CharacterDto
+import com.dennymathew.frameflow.data.remote.NamedLink
 import com.dennymathew.frameflow.data.remote.PageInfo
 import com.dennymathew.frameflow.data.remote.RickAndMortyApi
 import com.dennymathew.frameflow.data.remote.RickAndMortyResponse
@@ -35,7 +36,12 @@ fun characterDto(id: Int, name: String = "Character $id") = CharacterDto(
     name = name,
     status = "Alive",
     species = "Human",
-    image = "https://example.com/$id.jpeg"
+    image = "https://example.com/$id.jpeg",
+    type = "",
+    gender = "Male",
+    origin = NamedLink("Earth (C-137)", "https://example.com/location/1"),
+    location = NamedLink("Citadel of Ricks", "https://example.com/location/3"),
+    episode = listOf("https://example.com/episode/1", "https://example.com/episode/2")
 )
 
 /** A response for [ids]; [hasNext] controls whether the API reports a following page. */

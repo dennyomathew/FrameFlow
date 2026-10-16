@@ -3,6 +3,7 @@ package com.dennymathew.frameflow.data.repository
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.data.local.FavoriteEntity
 import com.dennymathew.frameflow.data.local.ImageDatabase
+import com.dennymathew.frameflow.data.local.toFavorite
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -30,16 +31,7 @@ class FavoritesRepository(
         if (dao.isFavorite(character.id)) {
             dao.delete(character.id)
         } else {
-            dao.insert(
-                FavoriteEntity(
-                    characterId = character.id,
-                    name = character.name,
-                    status = character.status,
-                    species = character.species,
-                    imageUrl = character.imageUrl,
-                    addedAtMillis = now()
-                )
-            )
+            dao.insert(character.toFavorite(addedAtMillis = now()))
         }
     }
 }

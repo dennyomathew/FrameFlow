@@ -60,6 +60,28 @@ class CharacterRepositoryTest {
     }
 
     @Test
+    fun getCharacterById_refetchesRowCachedBeforeDetailsExisted() = runTest {
+        database.characterDao.upsertAll(listOf(entity(7, "Cached").copy(gender = "")))
+        api.onGetCharacterById = { characterDto(it, name = "Remote") }
+
+        val result = repository.getCharacterById(7)
+
+        assertEquals("Male", result?.gender)
+        assertEquals("Earth (C-137)", result?.originName)
+        assertEquals(listOf(7), api.characterByIdRequests)
+        // Stored, so the next open is served from Room.
+        assertEquals("Male", database.characterDao.getById(7)?.gender)
+    }
+
+    @Test
+    fun getCharacterById_keepsRowCachedBeforeDetailsExistedWhenOffline() = runTest {
+        database.characterDao.upsertAll(listOf(entity(7, "Cached").copy(gender = "")))
+        api.onGetCharacterById = { throw IOException("offline") }
+
+        assertEquals("Cached", repository.getCharacterById(7)?.name)
+    }
+
+    @Test
     fun getCharacterById_returnsNullWhenOfflineAndUncached() = runTest {
         api.onGetCharacterById = { throw IOException("offline") }
 
@@ -131,6 +153,7 @@ class CharacterRepositoryTest {
         name = name,
         status = "Alive",
         species = "Human",
-        imageUrl = "https://example.com/$id.jpeg"
+        imageUrl = "https://example.com/$id.jpeg",
+        gender = "Female"
     )
 }

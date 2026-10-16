@@ -1,5 +1,6 @@
 package com.dennymathew.frameflow.data.remote
 
+import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.google.gson.annotations.SerializedName
 
 data class RickAndMortyResponse(
@@ -19,5 +20,30 @@ data class CharacterDto(
     @SerializedName("name") val name: String,
     @SerializedName("status") val status: String,
     @SerializedName("species") val species: String,
-    @SerializedName("image") val image: String
+    @SerializedName("image") val image: String,
+    @SerializedName("type") val type: String? = null,
+    @SerializedName("gender") val gender: String? = null,
+    @SerializedName("origin") val origin: NamedLink? = null,
+    @SerializedName("location") val location: NamedLink? = null,
+    @SerializedName("episode") val episode: List<String>? = null
+)
+
+/** A `{ "name", "url" }` reference to another API resource, such as a location. */
+data class NamedLink(
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("url") val url: String? = null
+)
+
+// Gson ignores Kotlin defaults and nullability, so a missing field arrives as null.
+fun CharacterDto.toEntity() = CharacterEntity(
+    id = id,
+    name = name,
+    status = status,
+    species = species,
+    imageUrl = image,
+    type = type.orEmpty(),
+    gender = gender.orEmpty(),
+    originName = origin?.name.orEmpty(),
+    locationName = location?.name.orEmpty(),
+    episodeCount = episode?.size ?: 0
 )
