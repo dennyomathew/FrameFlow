@@ -120,13 +120,13 @@ Search is intentionally hybrid for performance:
 ### 6.1 Immediate local results
 
 - `CharacterViewModel` exposes `searchFlow`.
-- `CharacterRepository.searchCharacters(name)` uses Room paging query:
-  - `characterDao.searchPagingSource(query)`
+- `CharacterRepository.searchCharacters(name, filter)` uses Room paging query:
+  - `characterDao.searchPagingSource(query, status, species, gender)`
 - As the user types, cached matches appear quickly with low latency.
 
 ### 6.2 Background online sync
 
-- On debounced query updates, `CharacterViewModel` triggers `syncSearchCharacters(query)`.
+- On debounced query updates, `CharacterViewModel` triggers `syncSearchCharacters(query, filter)`.
 - Repository fetches matching pages from API and upserts into Room.
 - Because search UI is reading from Room paging source, new matches appear automatically as DB updates arrive.
 
@@ -135,6 +135,17 @@ Search is intentionally hybrid for performance:
 - **Online**: local results first, then richer/fresher results as network sync completes.
 - **Offline**: local cached matches still work.
 - **No match**: screen shows a clear empty-state message.
+
+### 6.4 Status, species and gender filters
+
+- Filter chips under the search box set a `CharacterFilter` (each value null for "any").
+  The screen keeps them in `rememberSaveable`, so they survive rotation and process death.
+- Search runs when the query **or** any filter is set; a filter alone lists every cached match.
+- Room matches the filters exactly (case-insensitive, `COLLATE NOCASE`); the sync sends them to
+  the API as `status`, `species` and `gender` query params.
+- The Favorites tab applies the same filters in memory (`CharacterFilter.matches`).
+- Rows cached before schema 3 have an empty gender, so they only match a gender filter after the
+  sync re-downloads them.
 
 ## 7. Why this search design
 
@@ -196,3 +207,5 @@ backoff without real delays or network.
 - Current local search uses `LIKE` matching on `name`.
 - For larger datasets, upgrade to **Room FTS** for faster full-text queries and better ranking.
 - Current network sync for search limits page syncing (bounded fetch) to avoid over-fetching while typing.
+  This also caps filter-only results to the first 3 API pages plus whatever is already cached.
+- The species chip offers the API's common species; the API has no endpoint listing them all.

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import com.dennymathew.frameflow.data.CharacterFilter
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.data.network.ConnectivityObserver
 import com.dennymathew.frameflow.data.local.toCharacter
@@ -52,38 +53,40 @@ class CharacterViewModel @Inject constructor(
     val charactersFlow: Flow<PagingData<CharacterEntity>> = repository.getCharacters()
         .cachedIn(viewModelScope)
 
-    private val _searchQuery = MutableStateFlow("")
+    /** What the search box and filter chips ask for; active when either is set. */
+    private data class SearchRequest(val query: String = "", val filter: CharacterFilter = CharacterFilter()) {
+        val isActive: Boolean get() = query.isNotBlank() || filter.isActive
+    }
+
+    private val _search = MutableStateFlow(SearchRequest())
+    private val searchRequests = _search
+        .map { it.copy(query = it.query.trim()) }
+        .debounce(350)
+        .distinctUntilChanged()
     private val _isSearchSyncing = MutableStateFlow(false)
     val isSearchSyncing: Flow<Boolean> = _isSearchSyncing
 
-    // True when the last network sync for the current query failed; results are local-only.
+    // True when the last network sync for the current search failed; results are local-only.
     private val _searchSyncFailed = MutableStateFlow(false)
     val searchSyncFailed: StateFlow<Boolean> = _searchSyncFailed
 
-    private val _searchFlow = _searchQuery
-        .debounce(350)
-        .distinctUntilChanged()
-        .flatMapLatest { q ->
-            val query = q.trim()
-            if (query.isBlank()) flowOf(PagingData.empty())
-            else repository.searchCharacters(query)
+    private val _searchFlow = searchRequests
+        .flatMapLatest { request ->
+            if (!request.isActive) flowOf(PagingData.empty())
+            else repository.searchCharacters(request.query, request.filter)
         }
     val searchFlow = _searchFlow.cachedIn(viewModelScope)
 
     init {
         viewModelScope.launch {
-            _searchQuery
-                .debounce(350)
-                .distinctUntilChanged()
-                .collectLatest { q ->
-                    val query = q.trim()
-                    if (query.isBlank()) {
-                        _isSearchSyncing.value = false
-                        _searchSyncFailed.value = false
-                        return@collectLatest
-                    }
-                    syncSearch(query)
+            searchRequests.collectLatest { request ->
+                if (!request.isActive) {
+                    _isSearchSyncing.value = false
+                    _searchSyncFailed.value = false
+                    return@collectLatest
                 }
+                syncSearch(request)
+            }
         }
         // Re-run a search sync that failed while offline once the connection is back.
         viewModelScope.launch {
@@ -94,25 +97,29 @@ class CharacterViewModel @Inject constructor(
     }
 
     fun setSearchQuery(q: String) {
-        _searchQuery.value = q
+        _search.value = _search.value.copy(query = q)
+    }
+
+    fun setFilter(filter: CharacterFilter) {
+        _search.value = _search.value.copy(filter = filter)
     }
 
     fun refreshSearch() {
-        val query = _searchQuery.value.trim()
-        if (query.isBlank()) return
-        viewModelScope.launch { syncSearch(query) }
+        val request = _search.value.let { it.copy(query = it.query.trim()) }
+        if (!request.isActive) return
+        viewModelScope.launch { syncSearch(request) }
     }
 
-    private suspend fun syncSearch(query: String) {
+    private suspend fun syncSearch(request: SearchRequest) {
         _isSearchSyncing.value = true
         try {
-            repository.syncSearchCharacters(query)
+            repository.syncSearchCharacters(request.query, request.filter)
             _searchSyncFailed.value = false
         } catch (e: IOException) {
-            Log.w(TAG, "Search sync failed for \"$query\"", e)
+            Log.w(TAG, "Search sync failed for $request", e)
             _searchSyncFailed.value = true
         } catch (e: HttpException) {
-            Log.w(TAG, "Search sync failed for \"$query\"", e)
+            Log.w(TAG, "Search sync failed for $request", e)
             _searchSyncFailed.value = true
         } finally {
             _isSearchSyncing.value = false

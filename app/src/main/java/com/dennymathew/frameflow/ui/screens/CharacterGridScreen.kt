@@ -38,6 +38,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import android.util.Log
 import coil.request.ImageRequest
 import coil.compose.SubcomposeAsyncImage
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.res.painterResource
+import com.dennymathew.frameflow.R
+import com.dennymathew.frameflow.data.CharacterFilter
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.ui.CharacterViewModel
 
@@ -50,12 +55,19 @@ fun CharacterGridScreen(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var showFavorites by rememberSaveable { mutableStateOf(false) }
+    var statusFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var speciesFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var genderFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    val filter = CharacterFilter(statusFilter, speciesFilter, genderFilter)
     val favorites by viewModel.favorites.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
-    val isSearching = query.isNotBlank()
+    val isSearching = query.isNotBlank() || filter.isActive
     val isSearchSyncing by viewModel.isSearchSyncing.collectAsState(initial = false)
     LaunchedEffect(query) {
         viewModel.setSearchQuery(query)
+    }
+    LaunchedEffect(filter) {
+        viewModel.setFilter(filter)
     }
 
     val lazyPagingItems: LazyPagingItems<CharacterEntity> =
@@ -124,6 +136,39 @@ fun CharacterGridScreen(
                         }
                     }
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+                ) {
+                    FilterDropdownChip(
+                        label = "Status",
+                        options = CharacterFilter.STATUSES,
+                        selected = statusFilter,
+                        onSelect = { statusFilter = it }
+                    )
+                    FilterDropdownChip(
+                        label = "Species",
+                        options = CharacterFilter.SPECIES,
+                        selected = speciesFilter,
+                        onSelect = { speciesFilter = it }
+                    )
+                    FilterDropdownChip(
+                        label = "Gender",
+                        options = CharacterFilter.GENDERS,
+                        selected = genderFilter,
+                        onSelect = { genderFilter = it }
+                    )
+                    if (filter.isActive) {
+                        TextButton(onClick = {
+                            statusFilter = null
+                            speciesFilter = null
+                            genderFilter = null
+                        }) { Text("Clear filters") }
+                    }
+                }
                 ListToggle(
                     showFavorites = showFavorites,
                     onShowFavoritesChange = { showFavorites = it },
@@ -174,8 +219,10 @@ fun CharacterGridScreen(
             .consumeWindowInsets(innerPadding)
         if (showFavorites) {
             FavoritesGrid(
-                favorites = favorites.filter { it.name.contains(query.trim(), ignoreCase = true) },
-                query = query.trim(),
+                favorites = favorites.filter {
+                    it.name.contains(query.trim(), ignoreCase = true) && filter.matches(it)
+                },
+                isFiltered = query.isNotBlank() || filter.isActive,
                 onCharacterClick = onCharacterClick,
                 onToggleFavorite = viewModel::toggleFavorite,
                 contentPadding = gridPadding,
@@ -247,7 +294,11 @@ fun CharacterGridScreen(
                             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         } else {
                             Text(
-                                text = "No characters found for \"$query\"",
+                                text = if (query.isNotBlank()) {
+                                    "No characters found for \"${query.trim()}\""
+                                } else {
+                                    "No characters match these filters"
+                                },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
                             )
@@ -360,7 +411,7 @@ private fun ListToggle(
 @Composable
 fun FavoritesGrid(
     favorites: List<CharacterEntity>,
-    query: String,
+    isFiltered: Boolean,
     onCharacterClick: (Int) -> Unit,
     onToggleFavorite: (CharacterEntity) -> Unit,
     contentPadding: PaddingValues,
@@ -369,10 +420,10 @@ fun FavoritesGrid(
     if (favorites.isEmpty()) {
         Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) {
             Text(
-                text = if (query.isEmpty()) {
-                    "No favorites yet. Tap ♡ on a character to save it."
+                text = if (isFiltered) {
+                    "No favorites match your search"
                 } else {
-                    "No favorites match \"$query\""
+                    "No favorites yet. Tap ♡ on a character to save it."
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
@@ -545,3 +596,52 @@ internal fun StatusDot(status: String, modifier: Modifier = Modifier) {
             .background(color)
     )
 }
+
+/**
+ * A filter chip that opens a menu of [options]. Shows [label] when nothing is selected and the
+ * selected option otherwise; "Any" clears it.
+ */
+@Composable
+private fun FilterDropdownChip(
+    label: String,
+    options: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        FilterChip(
+            selected = selected != null,
+            onClick = { expanded = true },
+            label = { Text(selected?.let(::filterLabel) ?: label) },
+            trailingIcon = {
+                Icon(
+                    painter = painterResource(R.drawable.ic_arrow_drop_down),
+                    contentDescription = null,
+                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                )
+            }
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Any ${label.lowercase()}") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
+            )
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(filterLabel(option)) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** API values are lower case ("alive", "unknown"); show them capitalised. */
+private fun filterLabel(value: String) = value.replaceFirstChar { it.uppercase() }
