@@ -6,7 +6,10 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
+import com.dennymathew.frameflow.data.local.FavoriteEntity
 import com.dennymathew.frameflow.data.local.ImageDatabase
+import kotlinx.coroutines.runBlocking
+import androidx.compose.ui.test.onAllNodesWithText
 import com.dennymathew.frameflow.data.network.ConnectivityObserver
 import com.dennymathew.frameflow.data.repository.CharacterRepository
 import com.dennymathew.frameflow.data.repository.FavoritesRepository
@@ -44,6 +47,39 @@ class CharacterGridScreenTest {
     fun tearDown() {
         database.close()
     }
+
+    @Test
+    fun statusFilter_narrowsFavoritesAndSurvivesSaveAndRestore() {
+        runBlocking {
+            database.favoriteDao.insert(favorite(1, "Rick Sanchez", status = "Alive"))
+            database.favoriteDao.insert(favorite(2, "Birdperson", status = "Dead"))
+        }
+        val restorationTester = StateRestorationTester(composeRule)
+        restorationTester.setContent {
+            CharacterGridScreen(viewModel = viewModel, onCharacterClick = {})
+        }
+        composeRule.onNodeWithText("Favorites").performClick()
+        composeRule.waitUntil { composeRule.onAllNodesWithText("Birdperson").fetchSemanticsNodes().isNotEmpty() }
+
+        composeRule.onNodeWithText("Status").performClick()
+        composeRule.onNodeWithText("Dead").performClick()
+
+        composeRule.onNodeWithText("Birdperson").assertExists()
+        composeRule.onNodeWithText("Rick Sanchez").assertDoesNotExist()
+
+        restorationTester.emulateSavedInstanceStateRestore()
+
+        composeRule.onNodeWithText("Dead").assertIsSelected()
+        composeRule.onNodeWithText("Rick Sanchez").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Clear filters").performClick()
+        composeRule.onNodeWithText("Rick Sanchez").assertExists()
+    }
+
+    private fun favorite(id: Int, name: String, status: String) = FavoriteEntity(
+        characterId = id, name = name, status = status, species = "Human",
+        imageUrl = "https://example.com/$id.jpeg", addedAtMillis = id.toLong()
+    )
 
     @Test
     fun favoritesTab_survivesSaveAndRestore() {

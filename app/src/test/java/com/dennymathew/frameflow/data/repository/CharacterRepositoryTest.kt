@@ -1,6 +1,7 @@
 package com.dennymathew.frameflow.data.repository
 
 import androidx.paging.testing.asSnapshot
+import com.dennymathew.frameflow.data.CharacterFilter
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.data.local.ImageDatabase
 import com.dennymathew.frameflow.testutil.FakeRickAndMortyApi
@@ -93,6 +94,47 @@ class CharacterRepositoryTest {
         repository.syncSearchCharacters("  ")
 
         assertTrue(api.characterPageRequests.isEmpty())
+    }
+
+    @Test
+    fun syncSearch_filtersOnly_sendsFiltersWithoutName() = runTest {
+        api.onGetCharacters = { _, _ -> pageResponse(1..3, hasNext = false) }
+
+        repository.syncSearchCharacters("", CharacterFilter(status = "dead", gender = "female"))
+
+        assertEquals(listOf(1 to null), api.characterPageRequests)
+        assertEquals(listOf(CharacterFilter(status = "dead", gender = "female")), api.characterFilterRequests)
+    }
+
+    @Test
+    fun searchCharacters_appliesFiltersCaseInsensitively() = runTest {
+        database.characterDao.upsertAll(
+            listOf(
+                entity(1, "Rick Sanchez").copy(gender = "Male"),
+                entity(2, "Summer Smith"),
+                entity(3, "Dead Summer").copy(status = "Dead"),
+                entity(4, "Alien Summer").copy(species = "Alien")
+            )
+        )
+
+        val names = repository.searchCharacters(
+            "summer",
+            CharacterFilter(status = "alive", species = "human", gender = "female")
+        ).asSnapshot().map { it.name }
+
+        assertEquals(listOf("Summer Smith"), names)
+    }
+
+    @Test
+    fun searchCharacters_filterWithoutName_matchesAllNames() = runTest {
+        database.characterDao.upsertAll(
+            listOf(entity(1, "Rick Sanchez").copy(status = "Dead"), entity(2, "Morty Smith"))
+        )
+
+        val names = repository.searchCharacters("", CharacterFilter(status = "dead"))
+            .asSnapshot().map { it.name }
+
+        assertEquals(listOf("Rick Sanchez"), names)
     }
 
     @Test

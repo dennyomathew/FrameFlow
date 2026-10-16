@@ -4,6 +4,7 @@ import androidx.paging.ExperimentalPagingApi
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
+import com.dennymathew.frameflow.data.CharacterFilter
 import com.dennymathew.frameflow.data.local.ImageDatabase
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.data.local.hasDetails
@@ -39,20 +40,36 @@ class CharacterRepository @Inject constructor(
     }
 
     // DB-backed search for instant local matches while network sync updates Room.
-    fun searchCharacters(name: String): Flow<PagingData<CharacterEntity>> {
+    fun searchCharacters(
+        name: String,
+        filter: CharacterFilter = CharacterFilter()
+    ): Flow<PagingData<CharacterEntity>> {
         return Pager(
             config = PagingConfig(pageSize = 20, enablePlaceholders = false),
-            pagingSourceFactory = { database.characterDao.searchPagingSource(name) }
+            pagingSourceFactory = {
+                database.characterDao.searchPagingSource(
+                    query = name,
+                    status = filter.status.orEmpty(),
+                    species = filter.species.orEmpty(),
+                    gender = filter.gender.orEmpty()
+                )
+            }
         ).flow
     }
 
-    suspend fun syncSearchCharacters(name: String) {
-        if (name.isBlank()) return
+    suspend fun syncSearchCharacters(name: String, filter: CharacterFilter = CharacterFilter()) {
+        if (name.isBlank() && !filter.isActive) return
 
         var page = 1
         repeat(MAX_SEARCH_SYNC_PAGES) {
             try {
-                val response = api.getCharacters(page = page, name = name)
+                val response = api.getCharacters(
+                    page = page,
+                    name = name.ifBlank { null },
+                    status = filter.status,
+                    species = filter.species,
+                    gender = filter.gender
+                )
                 val mapped = response.results.map { it.toEntity() }
                 if (mapped.isEmpty()) return
                 database.characterDao.upsertAll(mapped)

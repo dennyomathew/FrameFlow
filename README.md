@@ -92,6 +92,8 @@ The Rick and Morty API rate-limits bursts (HTTP 429), which a fast scroll throug
 ### 4. Hybrid Search (DB-first + Network Sync)
 Search now returns local Room matches immediately for responsiveness, then syncs network results in the background and upserts them into Room. Because the UI observes Room paging data, newly synced matches appear automatically without switching screens or data sources.
 
+Status, species and gender filter chips narrow the search (or the whole list, with no name typed) using the same flow: Room filters locally and the sync passes the filters to the API.
+
 ---
 
 ## 📸 Screenshots

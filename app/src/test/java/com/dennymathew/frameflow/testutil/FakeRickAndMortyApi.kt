@@ -1,5 +1,6 @@
 package com.dennymathew.frameflow.testutil
 
+import com.dennymathew.frameflow.data.CharacterFilter
 import com.dennymathew.frameflow.data.remote.CharacterDto
 import com.dennymathew.frameflow.data.remote.NamedLink
 import com.dennymathew.frameflow.data.remote.PageInfo
@@ -13,6 +14,8 @@ import retrofit2.Response
 class FakeRickAndMortyApi : RickAndMortyApi {
 
     val characterPageRequests = mutableListOf<Pair<Int, String?>>()
+    /** The status/species/gender filters of each request in [characterPageRequests]. */
+    val characterFilterRequests = mutableListOf<CharacterFilter>()
     val characterByIdRequests = mutableListOf<Int>()
 
     var onGetCharacters: (page: Int, name: String?) -> RickAndMortyResponse = { _, _ ->
@@ -20,8 +23,15 @@ class FakeRickAndMortyApi : RickAndMortyApi {
     }
     var onGetCharacterById: (id: Int) -> CharacterDto = { throw httpError(404) }
 
-    override suspend fun getCharacters(page: Int, name: String?): RickAndMortyResponse {
+    override suspend fun getCharacters(
+        page: Int,
+        name: String?,
+        status: String?,
+        species: String?,
+        gender: String?
+    ): RickAndMortyResponse {
         characterPageRequests += page to name
+        characterFilterRequests += CharacterFilter(status, species, gender)
         return onGetCharacters(page, name)
     }
 
