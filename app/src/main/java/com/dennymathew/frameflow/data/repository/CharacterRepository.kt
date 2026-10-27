@@ -8,6 +8,7 @@ import com.dennymathew.frameflow.data.CharacterFilter
 import com.dennymathew.frameflow.data.local.ImageDatabase
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.data.local.hasDetails
+import com.dennymathew.frameflow.data.local.toCharacter
 import com.dennymathew.frameflow.data.remote.RickAndMortyApi
 import com.dennymathew.frameflow.data.remote.CharacterRemoteMediator
 import com.dennymathew.frameflow.data.remote.toEntity
@@ -93,14 +94,25 @@ class CharacterRepository @Inject constructor(
         // Rows cached before schema 3 lack gender, origin etc.; refetch those once.
         if (dbItem != null && dbItem.hasDetails) return dbItem
 
-        // fallback to network, keeping the stale row if that fails
+        // fallback to network; if that fails, use what's stored locally
         return try {
             val fetched = api.getCharacterById(id).toEntity()
             database.characterDao.upsertAll(listOf(fetched))
             fetched
         } catch (e: Exception) {
-            dbItem
+            offlineFallback(id, dbItem)
         }
+    }
+
+    // A pull-to-refresh clears the cache but not favorites, which keep their own copy.
+    // Prefer whichever has details: a favorite with details beats a stale cache row.
+    private suspend fun offlineFallback(id: Int, dbItem: CharacterEntity?): CharacterEntity? {
+        val favorite = try {
+            database.favoriteDao.getById(id)?.toCharacter()
+        } catch (e: Exception) {
+            null
+        }
+        return if (favorite?.hasDetails == true) favorite else dbItem ?: favorite
     }
 
     companion object {
