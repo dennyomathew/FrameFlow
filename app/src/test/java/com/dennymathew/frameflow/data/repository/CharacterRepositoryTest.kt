@@ -4,6 +4,7 @@ import androidx.paging.testing.asSnapshot
 import com.dennymathew.frameflow.data.CharacterFilter
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.data.local.ImageDatabase
+import com.dennymathew.frameflow.data.local.toFavorite
 import com.dennymathew.frameflow.testutil.FakeRickAndMortyApi
 import com.dennymathew.frameflow.testutil.characterDto
 import com.dennymathew.frameflow.testutil.httpError
@@ -87,6 +88,59 @@ class CharacterRepositoryTest {
         api.onGetCharacterById = { throw IOException("offline") }
 
         assertNull(repository.getCharacterById(7))
+    }
+
+    @Test
+    fun getCharacterById_offlineAndUncached_returnsFavoriteCopy() = runTest {
+        database.favoriteDao.insert(
+            entity(7, "Saved").copy(originName = "Earth", episodeCount = 3).toFavorite(addedAtMillis = 1L)
+        )
+        api.onGetCharacterById = { throw IOException("offline") }
+
+        val result = repository.getCharacterById(7)
+
+        assertEquals("Saved", result?.name)
+        assertEquals("Female", result?.gender)
+        assertEquals("Earth", result?.originName)
+        assertEquals(3, result?.episodeCount)
+        assertEquals(listOf(7), api.characterByIdRequests)
+    }
+
+    @Test
+    fun getCharacterById_offline_prefersFavoriteWithDetailsOverStaleRow() = runTest {
+        database.characterDao.upsertAll(listOf(entity(7, "Stale").copy(gender = "")))
+        database.favoriteDao.insert(entity(7, "Saved").toFavorite(addedAtMillis = 1L))
+        api.onGetCharacterById = { throw IOException("offline") }
+
+        assertEquals("Saved", repository.getCharacterById(7)?.name)
+    }
+
+    @Test
+    fun getCharacterById_offline_prefersStaleRowOverFavoriteWithoutDetails() = runTest {
+        database.characterDao.upsertAll(listOf(entity(7, "Stale").copy(gender = "")))
+        database.favoriteDao.insert(
+            entity(7, "Saved").copy(gender = "").toFavorite(addedAtMillis = 1L)
+        )
+        api.onGetCharacterById = { throw IOException("offline") }
+
+        assertEquals("Stale", repository.getCharacterById(7)?.name)
+    }
+
+    @Test
+    fun getCharacterById_cachedWithDetails_winsOverFavorite() = runTest {
+        database.characterDao.upsertAll(listOf(entity(7, "Cached")))
+        database.favoriteDao.insert(entity(7, "Saved").toFavorite(addedAtMillis = 1L))
+
+        assertEquals("Cached", repository.getCharacterById(7)?.name)
+        assertTrue(api.characterByIdRequests.isEmpty())
+    }
+
+    @Test
+    fun getCharacterById_online_prefersNetworkOverFavorite() = runTest {
+        database.favoriteDao.insert(entity(7, "Saved").toFavorite(addedAtMillis = 1L))
+        api.onGetCharacterById = { characterDto(it, name = "Remote") }
+
+        assertEquals("Remote", repository.getCharacterById(7)?.name)
     }
 
     @Test

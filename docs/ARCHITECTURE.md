@@ -110,7 +110,12 @@ Details route is `detail/{id}`:
 
 Rows cached before schema 3 (and favorites saved before it) have empty detail columns.
 `CharacterEntity.hasDetails` (gender is never empty in API data) detects them, and the
-repository refetches such a row once; offline, it falls back to the stale row.
+repository refetches such a row once.
+
+When the network fails, the repository falls back to local copies: a favorite's own copy
+(`favoriteDao.getById`, via `FavoriteEntity.toCharacter()`) if it has details, else the stale
+cache row, else a favorite without details, else not-found. Pull-to-refresh clears the cache but
+not favorites, so a favorite's details still open offline after a refresh.
 5. Screen renders loading, not-found, or detail content.
 
 ## 6. Search mechanism (hybrid)
