@@ -70,7 +70,10 @@ If `nextKey`/`prevKey` is missing where required, mediator returns
 
 After fetching one page from network:
 
-1. If `loadType == REFRESH`, clear old `remote_keys` and `characters`.
+1. If `loadType == REFRESH`, clear `remote_keys` only. The grid's query joins `remote_keys`, so
+   it restarts at page 1; character rows stay cached so characters from later pages still open
+   and match searches offline. The upsert in step 4 refreshes the ones this page returns.
+   (Characters the API later removes stay in the cache; they can't reach the grid.)
 2. Compute `prevKey` and `nextKey` for that page.
 3. Insert new `RemoteKeysEntity` rows (one per character ID).
 4. Upsert mapped `CharacterEntity` rows.
@@ -114,9 +117,17 @@ repository refetches such a row once.
 
 When the network fails, the repository falls back to local copies: a favorite's own copy
 (`favoriteDao.getById`, via `FavoriteEntity.toCharacter()`) if it has details, else the stale
-cache row, else a favorite without details, else not-found. Pull-to-refresh clears the cache but
-not favorites, so a favorite's details still open offline after a refresh.
-5. Screen renders loading, not-found, or detail content.
+cache row, else a favorite without details, else not-found. Favorites keep their own copy, so
+their details open offline even if the character was never cached on this device.
+
+The screen renders loading, not-found, or detail content.
+
+### 5.1 Pull-to-refresh
+
+Pull-to-refresh is disabled while offline (`Modifier.pullToRefresh(enabled = isOnline)`): a
+refresh can't succeed, the "Offline: showing saved characters" banner explains why, and failed
+loads retry automatically when the connection returns. Online, a refresh that fails keeps the
+cache (nothing is cleared until page 1 has arrived) and offers Retry in a snackbar.
 
 ## 6. Search mechanism (hybrid)
 

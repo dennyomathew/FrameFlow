@@ -9,6 +9,7 @@ import androidx.paging.RemoteMediator.MediatorResult
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.data.local.ImageDatabase
 import com.dennymathew.frameflow.testutil.FakeRickAndMortyApi
+import com.dennymathew.frameflow.testutil.characterDto
 import com.dennymathew.frameflow.testutil.httpError
 import com.dennymathew.frameflow.testutil.inMemoryDatabase
 import com.dennymathew.frameflow.testutil.pageResponse
@@ -69,15 +70,35 @@ class CharacterRemoteMediatorTest {
     }
 
     @Test
-    fun refresh_replacesPreviouslyCachedData() = runTest {
+    fun refresh_restartsGridAtFirstPageButKeepsCachedCharacters() = runTest {
         api.onGetCharacters = { _, _ -> pageResponse(1..40, hasNext = true) }
         mediator.load(LoadType.REFRESH, pagingState())
 
         api.onGetCharacters = { _, _ -> pageResponse(1..20, hasNext = true) }
         mediator.load(LoadType.REFRESH, pagingState())
 
-        assertEquals(20, characterCount())
+        // The grid only shows characters with page keys, so it starts again at page 1...
         assertNull(database.remoteKeysDao.getRemoteKeysForCharacterId(40))
+        assertEquals((1..20).toList(), gridIds())
+        // ...while later pages stay cached for details and search, including offline.
+        assertEquals(40, characterCount())
+        assertEquals("Character 40", database.characterDao.getById(40)?.name)
+    }
+
+    @Test
+    fun refresh_updatesCharactersItReturns() = runTest {
+        api.onGetCharacters = { _, _ -> pageResponse(1..20, hasNext = true) }
+        mediator.load(LoadType.REFRESH, pagingState())
+
+        api.onGetCharacters = { _, _ ->
+            RickAndMortyResponse(
+                info = PageInfo(next = "https://example.com/next"),
+                results = listOf(characterDto(1, name = "Rick (renamed)"))
+            )
+        }
+        mediator.load(LoadType.REFRESH, pagingState())
+
+        assertEquals("Rick (renamed)", database.characterDao.getById(1)?.name)
     }
 
     @Test
@@ -177,6 +198,13 @@ class CharacterRemoteMediatorTest {
         config = PagingConfig(pageSize = 20),
         leadingPlaceholderCount = 0
     )
+
+    private suspend fun gridIds(): List<Int> {
+        val result = database.characterDao.pagingSource().load(
+            PagingSource.LoadParams.Refresh(key = null, loadSize = 100, placeholdersEnabled = false)
+        )
+        return (result as PagingSource.LoadResult.Page).data.map { it.id }
+    }
 
     private suspend fun characterCount(): Int =
         (1..100).count { database.characterDao.getById(it) != null }

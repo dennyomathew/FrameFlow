@@ -9,7 +9,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -230,16 +232,23 @@ fun CharacterGridScreen(
             )
             return@Scaffold
         }
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = {
-                lazyPagingItems.refresh()
-                if (isSearching) {
-                    viewModel.refreshSearch()
-                }
-            },
+        // Pull-to-refresh is off while offline: a refresh can't succeed, and the offline banner
+        // explains why. Loads retry automatically once the connection returns.
+        val pullToRefreshState = rememberPullToRefreshState()
+        Box(
             modifier = contentModifier
                 .background(MaterialTheme.colorScheme.background)
+                .pullToRefresh(
+                    isRefreshing = isRefreshing,
+                    state = pullToRefreshState,
+                    enabled = isOnline,
+                    onRefresh = {
+                        lazyPagingItems.refresh()
+                        if (isSearching) {
+                            viewModel.refreshSearch()
+                        }
+                    }
+                )
         ) {
             val refreshState = lazyPagingItems.loadState.refresh
             when {
@@ -383,6 +392,11 @@ fun CharacterGridScreen(
                     }
                 }
             }
+            PullToRefreshDefaults.Indicator(
+                state = pullToRefreshState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }
