@@ -48,9 +48,12 @@ class CharacterRemoteMediator(
             val endOfPaginationReached = characters.isEmpty() || response.info?.next == null
 
             database.withTransaction {
+                // A refresh restarts the grid at page 1 by forgetting the page keys (the grid only
+                // shows characters that have one). Character rows stay cached, so characters from
+                // later pages still open and match searches offline; the upsert below refreshes
+                // the ones this page returns.
                 if (loadType == LoadType.REFRESH) {
                     database.remoteKeysDao.clearRemoteKeys()
-                    database.characterDao.clearAll()
                 }
 
                 val prevKey = if (page == STARTING_PAGE_INDEX) null else page - 1

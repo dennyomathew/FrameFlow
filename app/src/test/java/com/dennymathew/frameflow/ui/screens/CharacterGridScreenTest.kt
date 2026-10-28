@@ -16,6 +16,15 @@ import com.dennymathew.frameflow.data.repository.FavoritesRepository
 import com.dennymathew.frameflow.testutil.FakeRickAndMortyApi
 import com.dennymathew.frameflow.testutil.inMemoryDatabase
 import com.dennymathew.frameflow.ui.CharacterViewModel
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import com.dennymathew.frameflow.testutil.pageResponse
+import org.junit.Assert.assertEquals
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -30,22 +39,64 @@ class CharacterGridScreenTest {
     val composeRule = createComposeRule()
 
     private lateinit var database: ImageDatabase
+    private val api = FakeRickAndMortyApi()
     private lateinit var viewModel: CharacterViewModel
 
     @Before
     fun setUp() {
         database = inMemoryDatabase()
-        val api = FakeRickAndMortyApi()
-        viewModel = CharacterViewModel(
-            CharacterRepository(api, database),
-            FavoritesRepository(database),
-            ConnectivityObserver(ApplicationProvider.getApplicationContext())
-        )
+        api.onGetCharacters = { _, _ -> pageResponse(1..20, hasNext = false) }
+        viewModel = newViewModel()
     }
 
-    @After
-    fun tearDown() {
-        database.close()
+    private fun newViewModel() = CharacterViewModel(
+        CharacterRepository(api, database),
+        FavoritesRepository(database),
+        ConnectivityObserver(ApplicationProvider.getApplicationContext())
+    )
+
+    /** Makes the device's active network validated (online) or not (offline). */
+    private fun setOnline(online: Boolean) {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
+        val capabilities = ShadowNetworkCapabilities.newInstance()
+        if (online) {
+            shadowOf(capabilities).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            shadowOf(capabilities).addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        }
+        shadowOf(connectivityManager).setNetworkCapabilities(connectivityManager.activeNetwork, capabilities)
+    }
+
+    /** Shows the grid, waits for the first page, then pulls to refresh. Returns the API requests made by the pull. */
+    private fun pullToRefreshRequests(): Int {
+        composeRule.setContent {
+            CharacterGridScreen(viewModel = viewModel, onCharacterClick = {})
+        }
+        composeRule.waitUntil { composeRule.onAllNodesWithText("Character 1").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.waitForIdle()
+        val before = api.characterPageRequests.size
+
+        composeRule.onNodeWithText("Character 1").performTouchInput { swipeDown(endY = bottom * 3) }
+        composeRule.waitForIdle()
+
+        return api.characterPageRequests.size - before
+    }
+
+    @Test
+    fun pullToRefresh_online_refreshes() {
+        setOnline(true)
+        viewModel = newViewModel()
+
+        assertEquals(1, pullToRefreshRequests())
+    }
+
+    @Test
+    fun pullToRefresh_offline_isDisabled() {
+        setOnline(false)
+        viewModel = newViewModel()
+
+        assertEquals(0, pullToRefreshRequests())
+        composeRule.onNodeWithText("Offline: showing saved characters").assertExists()
     }
 
     @Test

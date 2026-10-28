@@ -66,7 +66,7 @@ class FavoritesRepositoryTest {
         database.characterDao.upsertAll(listOf(character(1)))
         repository.toggle(character(1))
 
-        // What a pull-to-refresh does to the cache.
+        // The cache is disposable; favorites must not depend on it.
         database.characterDao.clearAll()
 
         assertEquals(listOf(1), repository.favorites.first().map { it.characterId })
