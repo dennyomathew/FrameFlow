@@ -14,11 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
-import androidx.compose.ui.platform.LocalContext
 import com.dennymathew.frameflow.data.local.CharacterEntity
 import com.dennymathew.frameflow.ui.CharacterDetailViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -99,13 +95,9 @@ fun CharacterDetailScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp)
                 ) {
-                    SubcomposeAsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(character?.imageUrl)
-                            .crossfade(true)
-                            .build(),
+                    CharacterImage(
+                        url = character?.imageUrl,
                         contentDescription = character?.name,
-                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(360.dp)
