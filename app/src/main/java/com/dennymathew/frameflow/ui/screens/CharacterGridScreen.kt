@@ -24,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -35,11 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import android.util.Log
-import coil.request.ImageRequest
-import coil.compose.SubcomposeAsyncImage
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.res.painterResource
@@ -511,42 +506,9 @@ fun CharacterCard(
                     .fillMaxWidth()
                     .weight(1.2f)
             ) {
-                SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(character.imageUrl)
-                        .crossfade(true)
-                        .build(),
+                CharacterImage(
+                    url = character.imageUrl,
                     contentDescription = character.name,
-                    contentScale = ContentScale.Crop,
-                    onError = { state ->
-                        Log.e("FrameFlow", "Coil failed to load: ${character.imageUrl}", state.result.throwable)
-                    },
-                    loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.LightGray.copy(alpha = 0.3f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        }
-                    },
-                    error = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "❌",
-                                style = MaterialTheme.typography.headlineMedium
-                            )
-                        }
-                    },
                     modifier = Modifier.fillMaxSize()
                 )
                 FavoriteButton(
