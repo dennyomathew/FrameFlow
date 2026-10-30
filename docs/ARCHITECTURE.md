@@ -213,6 +213,11 @@ response is 429 it closes it, waits, and sends the request again:
   "Couldn't load image" with a **Retry** button (`CharacterImage`, used by the grid cards and the
   detail screen). Retry starts a new request (Coil doesn't cache failures), so it goes back to
   the network; it doesn't open the character.
+- Offline, Coil reads only its disk cache (its network observer adds `only-if-cached`), so an
+  uncached image fails with a local `HTTP 504: Unsatisfiable Request (only-if-cached)` and no
+  request is sent. `CharacterImage` then shows "Offline" instead of Retry, and reloads failed
+  images by itself when the connection comes back. It reads connectivity from `LocalIsOnline`,
+  which `MainActivity` provides from `ConnectivityObserver`.
 - Other status codes (404, 500, …) and successful responses pass through untouched.
 - Waiting blocks only the OkHttp worker thread for that request, never the main thread.
 

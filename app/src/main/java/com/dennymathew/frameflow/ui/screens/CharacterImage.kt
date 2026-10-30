@@ -17,10 +17,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +39,17 @@ import coil.request.ImageRequest
 import com.dennymathew.frameflow.R
 
 /**
- * A character's image with a loading spinner and, if loading fails (usually a 429 that
- * outlasted `RateLimitRetryInterceptor`), a Retry button that requests it again.
+ * Whether the device is online, provided by `MainActivity` from `ConnectivityObserver`.
+ * Defaults to online so previews and tests that don't provide it behave normally.
+ */
+val LocalIsOnline = compositionLocalOf { true }
+
+/**
+ * A character's image with a loading spinner and, if loading fails, a way to recover:
+ * - online (usually a 429 that outlasted `RateLimitRetryInterceptor`): a Retry button;
+ * - offline (Coil only reads its disk cache then, and fails with a 504 "only-if-cached" for
+ *   images it hasn't cached): an "Offline" note, and the image reloads by itself once the
+ *   connection returns.
  */
 @Composable
 fun CharacterImage(
@@ -44,7 +57,23 @@ fun CharacterImage(
     contentDescription: String?,
     modifier: Modifier = Modifier
 ) {
+    val isOnline = LocalIsOnline.current
+    val currentIsOnline by rememberUpdatedState(isOnline)
     var retryCount by remember(url) { mutableIntStateOf(0) }
+    var failed by remember(url) { mutableStateOf(false) }
+    var wasOffline by remember { mutableStateOf(!isOnline) }
+
+    // Reload a failed image only when the connection comes back (offline -> online), not on
+    // the first composition, so an online failure keeps showing Retry.
+    LaunchedEffect(isOnline) {
+        if (!isOnline) {
+            wasOffline = true
+        } else if (wasOffline) {
+            wasOffline = false
+            if (failed) retryCount++
+        }
+    }
+
     // A new key recreates the image and so starts a new request. Coil doesn't cache failures,
     // so that request goes back to the network.
     key(retryCount) {
@@ -55,8 +84,16 @@ fun CharacterImage(
                 .build(),
             contentDescription = contentDescription,
             contentScale = ContentScale.Crop,
+            onLoading = { failed = false },
+            onSuccess = { failed = false },
             onError = { state ->
-                Log.e("FrameFlow", "Coil failed to load: $url", state.result.throwable)
+                failed = true
+                if (currentIsOnline) {
+                    Log.e("FrameFlow", "Coil failed to load: $url", state.result.throwable)
+                } else {
+                    // Expected: offline, Coil only serves images it has cached.
+                    Log.w("FrameFlow", "Image not cached while offline: $url")
+                }
             },
             loading = {
                 Box(
@@ -72,7 +109,7 @@ fun CharacterImage(
                 }
             },
             error = {
-                ImageLoadError(onRetry = { retryCount++ })
+                ImageLoadError(isOnline = isOnline, onRetry = { retryCount++ })
             },
             modifier = modifier
         )
@@ -80,7 +117,7 @@ fun CharacterImage(
 }
 
 @Composable
-private fun ImageLoadError(onRetry: () -> Unit) {
+private fun ImageLoadError(isOnline: Boolean, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -89,6 +126,22 @@ private fun ImageLoadError(onRetry: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        if (!isOnline) {
+            // Retrying can't work offline; the image reloads when the connection returns.
+            Text(
+                text = "Offline",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                text = "Image loads when you reconnect",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                textAlign = TextAlign.Center,
+                maxLines = 2
+            )
+            return@Column
+        }
         Text(
             text = "Couldn't load image",
             style = MaterialTheme.typography.bodySmall,

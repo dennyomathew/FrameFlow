@@ -2,6 +2,8 @@ package com.dennymathew.frameflow.ui.screens
 
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -112,5 +114,42 @@ class CharacterImageTest {
         composeRule.onNodeWithText("Retry").performClick()
         waitForImage()
         assertEquals(3, requests.get())
+    }
+
+    @Test
+    fun offlineFailure_showsOfflineWithoutRetry_andReloadsWhenBackOnline() {
+        val online = mutableStateOf(false)
+        composeRule.setContent {
+            CompositionLocalProvider(LocalIsOnline provides online.value) {
+                CharacterImage(url = character.imageUrl, contentDescription = character.name)
+            }
+        }
+        waitForText("Offline")
+        composeRule.onNodeWithText("Image loads when you reconnect").assertExists()
+        composeRule.onNodeWithText("Retry").assertDoesNotExist()
+        assertEquals(1, requests.get())
+
+        online.value = true
+        waitForImage()
+
+        assertEquals(2, requests.get())
+        composeRule.onNodeWithText("Offline").assertDoesNotExist()
+    }
+
+    @Test
+    fun goingOnline_doesNotReloadImagesThatLoaded() {
+        failures = 0
+        val online = mutableStateOf(false)
+        composeRule.setContent {
+            CompositionLocalProvider(LocalIsOnline provides online.value) {
+                CharacterImage(url = character.imageUrl, contentDescription = character.name)
+            }
+        }
+        waitForImage()
+
+        online.value = true
+        composeRule.waitForIdle()
+
+        assertEquals(1, requests.get())
     }
 }
